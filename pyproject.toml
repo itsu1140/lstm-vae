@@ -1,0 +1,22 @@
+[project]
+name = "lstm-vae"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.10.7",
+    "music21>=9.9.1",
+    "pretty-midi>=0.2.11",
+    "scikit-learn>=1.7.2",
+    "torch>=2.9.0",
+    "torchvision>=0.24.0",
+]
+
+[dependency-groups]
+dev = [
+    "miditoolkit>=1.0.1",
+    "mypy>=1.18.2",
+    "pretty-midi>=0.2.11",
+    "pyyaml>=6.0.3",
+]
