@@ -8,7 +8,6 @@ from torch.nn import functional as F
 
 class Encoder(nn.Module):
     def __init__(self, params: Params) -> None:
-        super().__init__()
         bidirection = True
         self.lstm = nn.LSTM(
             input_size=params.input_size,
@@ -40,7 +39,6 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(self, params: Params) -> None:
-        super().__init__()
         self.input_size = params.input_size
         self.hidden_size = params.hidden_size
         biderection = True
@@ -84,13 +82,18 @@ class LSTMVAE(nn.Module):
         self,
         device: torch.device,
         params: Params,
+        warmup_epoch: int = None,
     ) -> None:
         super().__init__()
         self.output_size = params.output_size
         self.device = device
         self.seq_len = params.seq_len
+        self.beta_max = params.beta_max
         self.encoder = Encoder(params)
         self.decoder = Decoder(params)
+        self.warmup_epoch = (
+            0.20 * params.epoch if warmup_epoch is None else warmup_epoch
+        )
 
     def reparameterize(self, mu: torch.Tensor, log: torch.Tensor) -> torch.Tensor:
         ep = torch.randn_like(mu).to(self.device)
@@ -98,44 +101,20 @@ class LSTMVAE(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
+        data: torch.Tensor,
         epoch: int,
-        chroma: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        x = x.to(self.device)
-        chroma = chroma.to(self.device)
+        data = data.to(self.device)
 
-        # LSTM encoder
-        mu, logvar = self.encoder(x)
+        mu, logvar = self.encoder(data)  # LSTM encoder
 
         # VAE
         z = self.reparameterize(mu, logvar)  # batch x latent
 
-        # LSTM decoder
-        output = self.decoder(z, self.seq_len)
+        output = self.decoder(z, self.seq_len)  # LSTM decoder
 
-        # calculate loss
-        recon, kl = self.loss_function(
-            pred=output,
-            target=chroma,
-            mu=mu,
-            logvar=logvar,
-            epoch=epoch,
-        )
+        recon_loss = F.mse_loss(output, data)
+        beta = min(self.beta_max, epoch / self.warmup_epochs)
+        kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp()) * beta
 
-        return output, recon, kl, z
-
-    def loss_function(
-        self,
-        pred: torch.Tensor,
-        target: torch.Tensor,
-        mu: torch.Tensor,
-        logvar: torch.Tensor,
-        epoch: int,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        # recon = F.smooth_l1_loss(input=pred, target=target, reduction="mean")
-        recon = F.binary_cross_entropy(pred, target, reduction="sum")
-        kl = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1)
-        kl = torch.mean(kl)
-        kl_weight = min(1, (epoch + 1) / 500) * 100
-        return recon, kl * kl_weight
+        return output, recon_loss, kl_loss, z
