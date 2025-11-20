@@ -1,36 +1,16 @@
 import argparse
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import torch
 import yaml
-from src.models.lstmvae import LSTMVAE
+from src.config.params import Params
 from src.models.pred import pred
 from src.plot import plot
 from src.train.train import Train
 from src.utils.logger import setup_logger
-
-
-@dataclass
-class Params:
-    # model
-    piano_size: int
-    input_size: int
-    output_size: int
-    seq_len: int
-    batch_size: int
-    hidden_size: int
-    latent_size: int
-    num_layers: int
-
-    # train
-    epoch: int
-
-    # midi
-    offset: int
-    unittime: int
 
 
 def train() -> None:
@@ -62,6 +42,7 @@ def train() -> None:
         hidden_size=128,
         latent_size=64,
         num_layers=2,
+        beta_max=1,
         # train
         epoch=300,
         # midi
@@ -70,8 +51,7 @@ def train() -> None:
     )
 
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model: LSTMVAE = LSTMVAE(device=device, params=params).to(device)
-    tr = Train(model=model, params=params)
+    tr = Train(params=params)
     start: str = datetime.now(jst).strftime("%Y%m%d %H:%M:%S")
     logger.info(f"Device: {device.type}\nStart training at {start}")
     tr.train()
